@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shorts Clean View</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>Shorts Clean View</h1>
+
+    <label class="row">
+      <span>Ativado</span>
+      <input id="enabled" type="checkbox" />
+    </label>
+
+    <label class="row">
+      <span>Lado</span>
+      <select id="side">
+        <option value="left">Esquerda</option>
+        <option value="right">Direita</option>
+      </select>
+    </label>
+
+    <label class="row">
+      <span>Posição vertical</span>
+      <select id="vAlign">
+        <option value="bottom">Embaixo</option>
+        <option value="center">Centro</option>
+        <option value="top">Em cima</option>
+      </select>
+    </label>
+
+    <label class="row">
+      <span>Largura</span>
+      <input id="dockWidthPx" type="range" min="240" max="520" step="10" />
+    </label>
+    <div class="hint"><span id="dockWidthValue">300px</span></div>
+
+    <label class="row">
+      <span>Gap</span>
+      <input id="dockGapPx" type="range" min="0" max="40" step="1" />
+    </label>
+    <div class="hint"><span id="dockGapValue">0px</span></div>
+
+    <label class="row">
+      <span>Fundo</span>
+      <input id="dimBackground" type="checkbox" />
+    </label>
+
+    <label class="row">
+      <span>Compactar</span>
+      <input id="compact" type="checkbox" />
+    </label>
+
+    <p class="note">
+      Se não aplicar na hora, recarrega a página do Shorts (F5).
+    </p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
