@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = "oz_shorts_clean_view_settings";
 
-  // (Compat) se teu popup antigo usava outra chave, o content.js vai migrar.
+  // (Compat) If an older popup used another key, content.js will migrate it.
   const DEFAULTS = {
     enabled: true,
     side: "left",

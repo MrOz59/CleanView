@@ -1,10 +1,10 @@
 (() => {
   "use strict";
 
-  // Chave nova (oficial)
+  // New (official) key
   const STORAGE_KEY = "oz_shorts_clean_view_settings";
 
-  // Chaves "legadas" (caso teu popup antigo salvava diferente)
+  // Legacy keys (in case an older popup saved differently)
   const LEGACY_KEYS = [
     "shorts_clean_view_settings",
     "oz_shorts_settings",
@@ -58,7 +58,7 @@
     out.dockGapPx = clamp(parseInt(out.dockGapPx ?? DEFAULTS.dockGapPx, 10), 0, 40);
     out.dimBackground = !!out.dimBackground;
     out.compact = !!out.compact;
-    // Força ancoragem sempre ligada
+    // Force anchoring to always be on
     out.autoAnchorToPlayer = true;
 
     return out;
@@ -81,15 +81,15 @@
   }
 
   async function getSettings() {
-    // 1) tenta sync na chave nova
+    // 1) try sync with the new key
     let s = await storageGet("sync", STORAGE_KEY);
     if (s && typeof s === "object") return normalizeSettings(s);
 
-    // 2) tenta local na chave nova (alguns setups usam local)
+    // 2) try local with the new key (some setups use local)
     s = await storageGet("local", STORAGE_KEY);
     if (s && typeof s === "object") return normalizeSettings(s);
 
-    // 3) tenta chaves legadas no sync/local e migra
+    // 3) try legacy keys in sync/local and migrate
     for (const k of LEGACY_KEYS) {
       const legacySync = await storageGet("sync", k);
       if (legacySync && typeof legacySync === "object") {
@@ -101,13 +101,13 @@
       const legacyLocal = await storageGet("local", k);
       if (legacyLocal && typeof legacyLocal === "object") {
         const norm = normalizeSettings(legacyLocal);
-        // migra pro sync também
+        // migrate to sync as well
         await storageSet("sync", STORAGE_KEY, norm);
         return norm;
       }
     }
 
-    // 4) nada encontrado
+    // 4) nothing found
     return normalizeSettings(null);
   }
 
@@ -283,7 +283,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     const viewportKey = `${viewportW}x${viewportH}`;
     const needReposition = !pinnedPos || layoutKey !== lastLayoutKey || viewportKey !== lastViewportKey;
 
-    // Se não ancorar no player: prende na tela, mas respeita vAlign
+    // If not anchored to the player: pin to the viewport and respect vAlign
     if (!settings.autoAnchorToPlayer) {
       const height = Math.round(viewportH - gap * 2);
       dock.style.setProperty("--oz-auto-scale", "1");
@@ -362,7 +362,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     dock.style.setProperty("--oz-auto-scale", autoScale.toFixed(3));
     dock.style.height = `${Math.round(height)}px`;
 
-    // vAlign: top/center/bottom (bottom = “lá embaixo”)
+    // vAlign: top/center/bottom (bottom = "at the bottom")
     const visualHeight = height * baseScale * autoScale;
     let top;
     if (pinnedPos && !needReposition) {
@@ -379,7 +379,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     const maxLeft = viewportW - safeRight - visualWidth;
     const minLeft = side === "left" ? safeLeft : gap;
 
-    // Lado: esquerda/direita (com auto-ajuste de espaço)
+    // Side: left/right (with auto-fit to available space)
     let left;
     if (pinnedPos && !needReposition) {
       left = pinnedPos.left;
@@ -486,7 +486,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     );
   }
 
-  // Se qualquer storage mudar, atualiza (sync e local)
+  // If any storage changes, update (sync and local)
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "sync" && area !== "local") return;
     if (changes[STORAGE_KEY]) refresh();

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Shorts Clean View",
   "version": "1.0.1",
-  "description": "Move metapanel do YouTube Shorts para um dock lateral.",
+  "description": "Move the YouTube Shorts metapanel into a side dock.",
   "permissions": ["storage"],
   "host_permissions": ["https://www.youtube.com/*"],
   "action": {
