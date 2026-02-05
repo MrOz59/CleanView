@@ -16,7 +16,6 @@
   };
 
   const elEnabled = document.getElementById("enabled");
-  const elSide = document.getElementById("side");
   const elVAlign = document.getElementById("vAlign");
   const elDockWidth = document.getElementById("dockWidthPx");
   const elDockWidthValue = document.getElementById("dockWidthValue");
@@ -31,7 +30,7 @@
 
   function normalize(s) {
     const out = { ...DEFAULTS, ...(s || {}) };
-    out.side = out.side === "right" ? "right" : "left";
+    out.side = "left";
     out.vAlign = (out.vAlign === "top" || out.vAlign === "center") ? out.vAlign : "bottom";
     out.dockWidthPx = clamp(parseInt(out.dockWidthPx ?? DEFAULTS.dockWidthPx, 10), 240, 520);
     out.dockGapPx = clamp(parseInt(out.dockGapPx ?? DEFAULTS.dockGapPx, 10), 0, 40);
@@ -55,7 +54,6 @@
       const s = normalize(saved);
 
       elEnabled.checked = s.enabled;
-      elSide.value = s.side;
       elVAlign.value = s.vAlign;
 
       elDockWidth.value = s.dockWidthPx;
@@ -77,7 +75,6 @@
   }
 
   elEnabled.addEventListener("change", () => save({ enabled: elEnabled.checked }));
-  elSide.addEventListener("change", () => save({ side: elSide.value }));
   elVAlign.addEventListener("change", () => save({ vAlign: elVAlign.value }));
 
   elDockWidth.addEventListener("input", () => {

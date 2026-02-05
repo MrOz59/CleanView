@@ -17,6 +17,7 @@
   const DOCK_ID = "oz-shorts-dock";
   const DOCK_INNER_ID = "oz-shorts-dock-inner";
   const MOVED_CLASS = "oz-shorts-panel";
+  const HIDDEN_CLASS = "oz-shorts-dock-hidden";
 
   const DEFAULTS = {
     enabled: true,
@@ -52,7 +53,7 @@
     const out = { ...DEFAULTS, ...(s || {}) };
 
     out.enabled = !!out.enabled;
-    out.side = out.side === "right" ? "right" : "left";
+    out.side = "left";
     out.vAlign = (out.vAlign === "top" || out.vAlign === "center") ? out.vAlign : "bottom";
     out.dockWidthPx = clamp(parseInt(out.dockWidthPx ?? DEFAULTS.dockWidthPx, 10), 240, 520);
     out.dockGapPx = clamp(parseInt(out.dockGapPx ?? DEFAULTS.dockGapPx, 10), 0, 40);
@@ -70,13 +71,29 @@
 
   async function storageGet(area, key) {
     return new Promise((resolve) => {
-      getStorage(area).get([key], (res) => resolve(res[key]));
+      try {
+        const storage = getStorage(area);
+        storage.get([key], (res) => {
+          if (chrome.runtime?.lastError) {
+            resolve(undefined);
+            return;
+          }
+          resolve(res ? res[key] : undefined);
+        });
+      } catch (err) {
+        resolve(undefined);
+      }
     });
   }
 
   async function storageSet(area, key, value) {
     return new Promise((resolve) => {
-      getStorage(area).set({ [key]: value }, () => resolve());
+      try {
+        const storage = getStorage(area);
+        storage.set({ [key]: value }, () => resolve());
+      } catch (err) {
+        resolve();
+      }
     });
   }
 
@@ -156,8 +173,12 @@ html.${CLASS_ON} #${DOCK_ID} {
   width: ${settings.dockWidthPx}px;
   max-width: ${settings.dockWidthPx}px;
   transform: scale(calc(var(--oz-auto-scale, 1) * ${baseScale}));
-  transition: top 180ms ease, left 180ms ease, transform 180ms ease;
+  transition: top 180ms ease, left 180ms ease, transform 180ms ease, opacity 140ms ease;
   will-change: top, left, transform;
+}
+
+html.${CLASS_ON} #${DOCK_ID}.${HIDDEN_CLASS} {
+  opacity: 0;
 }
 
 html.${CLASS_ON} #${DOCK_INNER_ID} {
@@ -378,6 +399,14 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     const visualWidth = settings.dockWidthPx * baseScale * autoScale;
     const maxLeft = viewportW - safeRight - visualWidth;
     const minLeft = side === "left" ? safeLeft : gap;
+
+    const minVisibleWidth = Math.round(settings.dockWidthPx * 0.65);
+    const shouldHide = availableWidth < minVisibleWidth;
+    if (shouldHide) {
+      dock.classList.add(HIDDEN_CLASS);
+    } else {
+      dock.classList.remove(HIDDEN_CLASS);
+    }
 
     // Side: left/right (with auto-fit to available space)
     let left;
