@@ -40,6 +40,7 @@
   let pinnedPos = null;
   let lastLayoutKey = "";
   let lastViewportKey = "";
+  let lastPlayerKey = "";
 
   function clamp(n, min, max) {
     return Math.min(Math.max(n, min), max);
@@ -226,8 +227,18 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     if (!inner) return;
 
     const metapanel = findMetapanel();
+
+    // If the previously moved metapanel is stale (disconnected or no longer in inner),
+    // clear the reference so we can capture the new one
+    if (lastMovedMetapanel && (!lastMovedMetapanel.isConnected || !inner.contains(lastMovedMetapanel))) {
+      lastMovedMetapanel = null;
+      lastMetapanelParent = null;
+      lastMetapanelNextSibling = null;
+    }
+
     if (!metapanel) return;
 
+    // Already in the dock and it's the same element — nothing to do
     if (inner.contains(metapanel)) return;
 
     metapanel.classList.add(MOVED_CLASS);
@@ -300,9 +311,6 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     const viewportH = window.innerHeight;
     const baseScale = settings.compact ? 0.92 : 1;
     dock.style.transformOrigin = "left top";
-    const layoutKey = `${settings.side}|${settings.vAlign}|${settings.dockWidthPx}|${settings.dockGapPx}|${settings.compact}`;
-    const viewportKey = `${viewportW}x${viewportH}`;
-    const needReposition = !pinnedPos || layoutKey !== lastLayoutKey || viewportKey !== lastViewportKey;
 
     // If not anchored to the player: pin to the viewport and respect vAlign
     if (!settings.autoAnchorToPlayer) {
@@ -331,20 +339,32 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
 
     const guideRect = getGuideRect();
 
+    // Build keys to detect what changed
+    const layoutKey = `${settings.side}|${settings.vAlign}|${settings.dockWidthPx}|${settings.dockGapPx}|${settings.compact}`;
+    const viewportKey = `${viewportW}x${viewportH}`;
+    // Track actual player position/size so we recalculate when the player moves
+    const playerKey = `${Math.round(playerRect.left)}|${Math.round(playerRect.top)}|${Math.round(playerRect.width)}|${Math.round(playerRect.height)}`;
+    const needReposition = !pinnedPos
+      || layoutKey !== lastLayoutKey
+      || viewportKey !== lastViewportKey
+      || playerKey !== lastPlayerKey;
+
     const safeLeft = guideRect ? (guideRect.left + guideRect.width + gap) : gap;
     const safeRight = gap;
 
     const maxWidthLeft = Math.max(0, playerRect.left - gap - safeLeft);
     const maxWidthRight = Math.max(0, viewportW - safeRight - (playerRect.right + gap));
 
-    let side = pinnedPos ? pinnedPos.side : settings.side;
+    // Always recalculate side when repositioning
+    let side = settings.side;
     if (needReposition) {
-      side = settings.side;
       if (side === "left" && maxWidthLeft < 80 && maxWidthRight > maxWidthLeft) {
         side = "right";
       } else if (side === "right" && maxWidthRight < 80 && maxWidthLeft > maxWidthRight) {
         side = "left";
       }
+    } else if (pinnedPos) {
+      side = pinnedPos.side;
     }
 
     const dockInner = document.getElementById(DOCK_INNER_ID);
@@ -359,31 +379,24 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     }
 
     const rawHeight = contentHeight || 140;
-    const maxHeight = Math.max(140, viewportH - gap * 2);
-    const availableHeight = pinnedPos && !needReposition
-      ? Math.max(140, viewportH - gap - pinnedPos.top)
-      : maxHeight;
+    const maxWidthSide = side === "left" ? maxWidthLeft : maxWidthRight;
+
+    // Always use fresh available space from player rect (not stale pinnedPos)
+    const availableHeight = Math.max(140, viewportH - gap * 2);
     const verticalScale = contentHeight
       ? Math.min(1, availableHeight / (rawHeight * baseScale))
       : 1;
-    const maxWidthSide = side === "left" ? maxWidthLeft : maxWidthRight;
-    const availableWidth = pinnedPos && !needReposition
-      ? (
-        side === "left"
-          ? Math.max(0, playerRect.left - gap - pinnedPos.left)
-          : Math.max(0, viewportW - safeRight - pinnedPos.left)
-      )
-      : maxWidthSide;
-    const widthScale = availableWidth > 0
-      ? Math.min(1, availableWidth / (settings.dockWidthPx * baseScale))
-      : 1;
-    const autoScale = Math.min(verticalScale, widthScale);
+    const widthScale = maxWidthSide > 0
+      ? Math.min(1, maxWidthSide / (settings.dockWidthPx * baseScale))
+      : 0;
+    // Floor: never scale below 40% to prevent invisible/unusable dock
+    const autoScale = Math.max(0.4, Math.min(verticalScale, widthScale));
     const height = Math.max(140, Math.round(rawHeight));
 
     dock.style.setProperty("--oz-auto-scale", autoScale.toFixed(3));
     dock.style.height = `${Math.round(height)}px`;
 
-    // vAlign: top/center/bottom (bottom = "at the bottom")
+    // vAlign: top/center/bottom
     const visualHeight = height * baseScale * autoScale;
     let top;
     if (pinnedPos && !needReposition) {
@@ -392,7 +405,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
       top = Math.round(playerRect.top);
       if (settings.vAlign === "center") top = Math.round(playerRect.top + (playerRect.height - visualHeight) / 2);
       if (settings.vAlign === "bottom") top = Math.round(playerRect.bottom - visualHeight);
-      top = clamp(top, gap, viewportH - visualHeight - gap);
+      top = clamp(top, gap, Math.max(gap, viewportH - visualHeight - gap));
     }
     dock.style.top = `${top}px`;
 
@@ -400,8 +413,9 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     const maxLeft = viewportW - safeRight - visualWidth;
     const minLeft = side === "left" ? safeLeft : gap;
 
-    const minVisibleWidth = Math.round(settings.dockWidthPx * 0.65);
-    const shouldHide = availableWidth < minVisibleWidth;
+    // Hide only when truly no room (available < 50% of dock width)
+    const minVisibleWidth = Math.round(settings.dockWidthPx * 0.50);
+    const shouldHide = maxWidthSide < minVisibleWidth;
     if (shouldHide) {
       dock.classList.add(HIDDEN_CLASS);
     } else {
@@ -426,6 +440,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
       pinnedPos = { top, left, side };
       lastLayoutKey = layoutKey;
       lastViewportKey = viewportKey;
+      lastPlayerKey = playerKey;
     }
   }
 
@@ -445,15 +460,46 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
       style.textContent = "";
       restoreMetapanel();
       removeDock();
-      pinnedPos = null;
-      lastLayoutKey = "";
-      lastViewportKey = "";
     }
   }
 
   async function refresh() {
+    // Reset pinned position so the dock fully recalculates for the new context
+    pinnedPos = null;
+    lastLayoutKey = "";
+    lastViewportKey = "";
+    lastPlayerKey = "";
     const settings = await getSettings();
     await apply(settings);
+  }
+
+  // Polling to recapture the metapanel after it disappears (e.g. comments panel closed)
+  let recaptureTimer = null;
+  function scheduleRecapture() {
+    if (recaptureTimer) return;
+    let attempts = 0;
+    const maxAttempts = 10;
+    const tryRecapture = async () => {
+      recaptureTimer = null;
+      if (!document.documentElement.classList.contains(CLASS_ON)) return;
+      if (!isShortsPage()) return;
+
+      const inner = document.getElementById(DOCK_INNER_ID);
+      const hasContent = inner && inner.querySelector(`.${MOVED_CLASS}`);
+      if (hasContent) return; // Already recaptured
+
+      const settings = await getSettings();
+      moveMetapanelIntoDock();
+      positionDock(settings);
+
+      attempts++;
+      // Check if we got it; if not, keep trying
+      const gotIt = inner && inner.querySelector(`.${MOVED_CLASS}`);
+      if (!gotIt && attempts < maxAttempts) {
+        recaptureTimer = setTimeout(tryRecapture, 150 * attempts);
+      }
+    };
+    recaptureTimer = setTimeout(tryRecapture, 100);
   }
 
   function scheduleReposition(force = false) {
@@ -467,7 +513,34 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
       if (!isShortsPage()) return;
       moveMetapanelIntoDock();
       positionDock(settings);
+
+      // If the inner is empty (metapanel was removed by YouTube), start recapture polling
+      const inner = document.getElementById(DOCK_INNER_ID);
+      if (inner && !inner.querySelector(`.${MOVED_CLASS}`)) {
+        scheduleRecapture();
+      }
     });
+  }
+
+  // Refresh with retries — the player element may not be ready immediately after navigation
+  let navRefreshTimer = null;
+  function refreshAfterNavigation() {
+    if (navRefreshTimer) clearTimeout(navRefreshTimer);
+    let attempts = 0;
+    const maxAttempts = 6;
+    const tryRefresh = async () => {
+      navRefreshTimer = null;
+      await refresh();
+      attempts++;
+      // If the player rect isn't available yet, retry with increasing delay
+      if (attempts < maxAttempts && isShortsPage() && !getPlayerRect()) {
+        navRefreshTimer = setTimeout(tryRefresh, 100 * attempts);
+      } else if (attempts < maxAttempts && isShortsPage()) {
+        // One extra refresh after content settles (metapanel content may load late)
+        navRefreshTimer = setTimeout(refresh, 300);
+      }
+    };
+    navRefreshTimer = setTimeout(tryRefresh, 50);
   }
 
   function hookSpaNavigation() {
@@ -476,7 +549,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     const obs = new MutationObserver(() => {
       if (location.href !== lastHref) {
         lastHref = location.href;
-        setTimeout(refresh, 50);
+        refreshAfterNavigation();
         return;
       }
       if (document.documentElement.classList.contains(CLASS_ON) && isShortsPage()) {
@@ -491,16 +564,21 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
 
     history.pushState = function () {
       pushState.apply(this, arguments);
-      setTimeout(refresh, 50);
+      refreshAfterNavigation();
     };
 
     history.replaceState = function () {
       replaceState.apply(this, arguments);
-      setTimeout(refresh, 50);
+      refreshAfterNavigation();
     };
 
-    window.addEventListener("popstate", () => setTimeout(refresh, 50));
-    window.addEventListener("resize", () => scheduleReposition());
+    window.addEventListener("popstate", () => refreshAfterNavigation());
+    window.addEventListener("resize", () => {
+      // Reset pinned pos on resize so dock fully adapts to new dimensions
+      pinnedPos = null;
+      lastPlayerKey = "";
+      scheduleReposition(true);
+    });
     window.addEventListener(
       "scroll",
       () => {
