@@ -218,7 +218,41 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     const overlay = document.querySelector("ytd-reel-player-overlay-renderer");
     if (!overlay) return null;
 
-    return overlay.querySelector("#metapanel") || overlay.querySelector("#meta-panel");
+    return (
+      overlay.querySelector(".ytReelPlayerOverlayViewModelMetadataContainerMetapanel") ||
+      overlay.querySelector("#metapanel") ||
+      overlay.querySelector("#meta-panel")
+    );
+  }
+
+  function clearOldDockMetapanels(inner, currentMetapanel) {
+    const movedPanels = Array.from(inner.querySelectorAll(`.${MOVED_CLASS}`));
+
+    for (const panel of movedPanels) {
+      if (panel === currentMetapanel) continue;
+
+      panel.classList.remove(MOVED_CLASS);
+
+      if (
+        panel === lastMovedMetapanel &&
+        lastMetapanelParent &&
+        lastMetapanelParent.isConnected
+      ) {
+        if (lastMetapanelNextSibling && lastMetapanelNextSibling.isConnected) {
+          lastMetapanelParent.insertBefore(panel, lastMetapanelNextSibling);
+        } else {
+          lastMetapanelParent.appendChild(panel);
+        }
+      } else {
+        panel.remove();
+      }
+    }
+
+    if (lastMovedMetapanel && lastMovedMetapanel !== currentMetapanel) {
+      lastMovedMetapanel = null;
+      lastMetapanelParent = null;
+      lastMetapanelNextSibling = null;
+    }
   }
 
   function moveMetapanelIntoDock() {
@@ -238,6 +272,8 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
 
     if (!metapanel) return;
 
+    clearOldDockMetapanels(inner, metapanel);
+
     // Already in the dock and it's the same element — nothing to do
     if (inner.contains(metapanel)) return;
 
@@ -247,6 +283,7 @@ html.${CLASS_ON} #${DOCK_INNER_ID} .${MOVED_CLASS} {
     lastMetapanelNextSibling = metapanel.nextSibling;
 
     inner.appendChild(metapanel);
+    pinnedPos = null;
   }
 
   function restoreMetapanel() {
